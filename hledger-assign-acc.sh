@@ -95,6 +95,7 @@ main() {
     parseCommandLine "$@"
 
     declare ledgerFile=${LEDGER_FILE:-~/.hledger.journal}
+
     declare outputFile
     if [[ -z $OUTPUT_FILE ]]; then
         outputFile=$ledgerFile.assigned
@@ -122,7 +123,7 @@ main() {
                 # Highlight the unassigned account (instead of echo):
                 grep -wF "$UNASSIGNED_ACCOUNT" <<<"${line/ /*}"
                 echo
-                newAccount=$(fzf --reverse --height=60%< "$ACCOUNTS_FILE" | cut -d$'\t' -f1 || true)
+                newAccount=$(fzfSelectAccount)
                 if [[ -z $newAccount ]]; then
                     echo "You did not select an account. The posting will not be changed."
                     echo
@@ -134,10 +135,10 @@ main() {
               -v x="$UNASSIGNED_ACCOUNT" \
               -v y="$newAccount" \
               '{sub(x, y); print}' <<<"$line" \
-              | tee -a "$outputFile"
+              | echoAndAppend "$outputFile"
         else
             echo "$line" \
-              | tee -a "$outputFile"
+              | echoAndAppend "$outputFile"
         fi
     done < "$ledgerFile"
 
@@ -146,6 +147,24 @@ main() {
         tmp=$(mktemp)
         hledger -f "$outputFile" print > "$tmp" && mv "$tmp" "$outputFile"
     fi
+}
+
+echoAndAppend() {
+    declare outputFile=$1
+    tee -a "$outputFile"
+}
+
+fzfSelectAccount() {
+    (
+        # unset errexit in only subshell!
+        set +e
+        # see man fzf /EXIT STATUS
+        fzf --reverse --height=60%< "$ACCOUNTS_FILE" | cut -d$'\t' -f1
+        if (( $? == 0 || $? == 1 )); then
+            return 0
+        fi
+        return 1
+    )
 }
 
 main "$@"
