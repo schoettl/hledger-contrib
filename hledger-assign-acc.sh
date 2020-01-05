@@ -1,13 +1,15 @@
 #!/bin/bash
 # Interactively assign accounts from a list to hledger book entries.
-# It never changes the existing ledger file!
-
-# TODO smart detection of account names instead of accounts file
-# TODO on empty selection, do not change the account!
+# It never changes the existing ledger file.
+# fzf must be installed.
 
 printUsage() {
     cat <<EOF
-usage: $PROGNAME [options]
+usage: $PROGNAME [options] -u UNASSIGNED_ACCOUNT
+       $PROGNAME -h
+
+If neither -a nor -A are given, the list of accounts is determined by
+'hledger accounts'.
 
 options:
   -f LEDGER_FILE
@@ -77,9 +79,6 @@ parseCommandLine() {
     [[ -n $UNASSIGNED_ACCOUNT ]] \
         || exitWithError "error: -u must be specified."
 
-    [[ -n $ACCOUNTS_FILE || -n $ACCOUNT ]] \
-        || exitWithError "error: either -a or -A must be specified."
-
     [[ -n $ACCOUNTS_FILE && -n $ACCOUNT ]] \
         && exitWithError "error: either -a or -A must be specified."
 
@@ -105,6 +104,12 @@ main() {
     [[ -e $outputFile ]] \
         && exitWithError "error: output file exists already: $outputFile"
 
+    if [[ -z $ACCOUNTS_FILE && -z $ACCOUNT ]]; then
+        declare ACCOUNTS_FILE
+        ACCOUNTS_FILE=$(mktemp)
+        hledger -f "$ledgerFile" accounts > "$ACCOUNTS_FILE"
+    fi
+
     while IFS= read -r line; do
         # TODO not good enough, may find too much lines:
         if grep -q '^ ' <<<"$line" && grep -qwF "$UNASSIGNED_ACCOUNT" <<<"$line"; then
@@ -117,9 +122,10 @@ main() {
                 # Highlight the unassigned account (instead of echo):
                 grep -wF "$UNASSIGNED_ACCOUNT" <<<"${line/ /*}"
                 echo
-                newAccount=$(fzf --reverse --height=60%< "$ACCOUNTS_FILE" | cut -d$'\t' -f1)
+                newAccount=$(fzf --reverse --height=60%< "$ACCOUNTS_FILE" | cut -d$'\t' -f1 || true)
                 if [[ -z $newAccount ]]; then
-                    # TODO ask if sure and repeat
+                    echo "You did not select an account. The posting will not be changed."
+                    echo
                     newAccount=$UNASSIGNED_ACCOUNT
                 fi
             fi
