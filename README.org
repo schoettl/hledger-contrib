@@ -1,0 +1,125 @@
+* Efficiency Tools for hledger
+
+Not, that hledger is not efficient – but it is not made for
+
+- fixing a bad CSV files from a bank
+- quickly and interactively assigning accounts for book entries
+
+For me, the following tools are HUGE productivity boosters:
+
+** Fix the descriptions of book entries after importing a banks' bad CSV export
+
+Some banks' CSV exports have space characters at random positions in the
+description field.
+For example:
+
+: 2020-01-05 This is the des cription of a banks bad C SV expor ts
+:     ...
+
+(I think it comes from linebreaks in the bank system that are converted to
+spaces for the export.)
+
+You could fix this manually in the editor but it is a lot of work when you
+have hundreds of entries.
+
+My script creates a search regex for you (for use in vim) to find all these
+bad words!
+
+In vim, you would paste the regex in the search (=/=), press enter, and then
+the cursor will be located at:
+
+: 2020-01-05 This is the des cription of a banks bad C SV expor ts
+:     ...                   ^                         ^        ^
+
+Press =x= to delete the character under the cursor, press =n= to jump to the
+next location.
+
+Magic? No, this is the recipe (roughly):
+
+1. From the ledger file, get a list of all "words", i.e. groups of letters
+   without spaces. E.g. =2020-01-05,This,is,the,des,cription,...=
+
+2. For each pair of neighbors in this list, paste the two words together and
+   check if the new word is anywhere in the list.
+   E.g. =des,cription= -> =description= -> is in anywhere in the list?
+   In a big ledger file, it is very likely somewhere in the list.
+
+3. Print the regex to find =des cription=, for vim it is:
+   =<des\zs +cription>= (=<>= are word boundary matcher; =\zs= defines the
+   start of the match, i.e. the cursor position; = += is one or more spaces)
+
+Usage:
+
+#+BEGIN_EXAMPLE
+$ stack runhaskell searchstrings.hs
+$ echo "foo bar foobar helloworld hello world" | stack runhaskell searchstrings.hs
+$ stack runhaskell searchstrings.hs < ledger.journal
+$ grep ^20 ledger.journal | stack runhaskell searchstrings.hs | paste -sd'|'
+#+END_EXAMPLE
+
+Important: The search regex is "very magic", you cannot use it in vim with
+just =/=, you have to type =/\v= and /then/ paste it and press enter.
+
+** Quickly and interactively assign accounts for, e.g. postings to =expenses:unknown=
+
+After CSV import, when the account is unknown, it can be tedious to assign
+the appropriate account to book entries.
+I tried it in CSV, in a spreadsheet GUI, in the journal format but none of
+these was really efficient.
+
+My new script =hledger-assign-acc= aims to be an addon for hledger and
+operates on a journal file but never changes this file.
+It walks you through your journal file and asks you for every "unknown"
+account what real account it should be.
+For this interactive step, it uses [[https://github.com/junegunn/fzf][fzf]],
+a fuzzy-search selection menu for the terminal which provides a list of all
+possible accounts.
+It creates a new ledger file that you then can use to overwrite the original
+one.
+
+Watch this video for an example use case (with an anonymized data):
+
+[[https://asciinema.org/a/MJTXS3GSVO5AfN4ZtJDXhW9Mk]]
+
+Usage:
+
+#+BEGIN_EXAMPLE
+$ hledger-assign-acc -h
+
+usage: hledger-assign-acc [options]
+
+options:
+  -f LEDGER_FILE
+     if not set, look for the environment variable LEDGER_FILE and if not set
+     fall back to ~/.hledger.journal
+  -u UNASSIGNED_ACCOUNT
+     the unassigned account name, e.g. 'income:unknown'.
+  -a ACCOUNTS_FILE
+     use this file to interactivly lookup possible accounts with fzf.
+     the format must be:
+     1. one account per line,
+     2. each line tab-separated,
+     3. first column is the account name.
+  -A ACCOUNT
+     always use this account and assign it automatically.
+  -o OUTPUT_FILE
+     the output file. if not specified, output goes to LEDGER_FILE.assigned
+  -p
+     pretty-print the output ledgerfile
+  -h
+     print help message
+#+END_EXAMPLE
+
+** TODOs
+
+I want to write
+[[https://github.com/simonmichael/shelltestrunner][shelltests]] for
+hledger-assign-acc.
+
+Fix a few TODOs mentioned in the script.
+
+Maybe port it some day to haskell.
+
+** Discussion
+
+…
