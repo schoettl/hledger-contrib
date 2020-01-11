@@ -1,6 +1,6 @@
 #!/bin/bash
 # Interactively assign accounts from a list to hledger book entries.
-# It never changes the existing ledger file.
+# By default does not change the existing ledger file.
 # fzf must be installed.
 
 printUsage() {
@@ -27,6 +27,9 @@ options:
      always use this account and assign it automatically.
   -o OUTPUT_FILE
      the output file. if not specified, output goes to LEDGER_FILE.assigned
+  -i
+     update the original file in-place. dangerous! use this option only if you
+     have your ledger files under version control.
   -p
      pretty-print the output ledgerfile
   -h
@@ -50,7 +53,7 @@ exitWithError() {
 parseCommandLine() {
 
     declare option
-    while getopts 'f:u:a:A:o:ph' option; do
+    while getopts 'f:u:a:A:o:pih' option; do
         case $option in
             h)  printUsage
                 exit 0
@@ -67,6 +70,8 @@ parseCommandLine() {
                 ;;
             p)  declare -gr PRETTY_PRINT=1
                 ;;
+            i)  declare -gr IN_PLACE=1
+                ;;
             *)  printUsage >&2
                 # prints usage after the default error message (invalid option or missing option argument).
                 # default error messages are disabled if the first character of optstring is ":".
@@ -80,7 +85,10 @@ parseCommandLine() {
         || exitWithError "error: -u must be specified."
 
     [[ -n $ACCOUNTS_FILE && -n $ACCOUNT ]] \
-        && exitWithError "error: either -a or -A must be specified."
+        && exitWithError "error: you cannot specify both -a or -A."
+
+    [[ -n $OUTPUT_FILE && -n $IN_PLACE ]] \
+        && exitWithError "error: you cannot specify both -o and -i."
 
     if (( $# != 0 )); then
         printUsage
@@ -97,7 +105,11 @@ main() {
     declare ledgerFile=${LEDGER_FILE:-~/.hledger.journal}
 
     declare outputFile
-    if [[ -z $OUTPUT_FILE ]]; then
+    if [[ -n $IN_PLACE ]]; then
+        outputFile=$(mktemp)
+        rm "$outputFile"
+        # without rm, the error below would be triggered
+    elif [[ -z $OUTPUT_FILE ]]; then
         outputFile=$ledgerFile.assigned
     else
         outputFile=$OUTPUT_FILE
@@ -146,6 +158,12 @@ main() {
         declare tmp
         tmp=$(mktemp)
         hledger -f "$outputFile" print > "$tmp" && mv "$tmp" "$outputFile"
+    fi
+
+    if [[ -n $IN_PLACE ]]; then
+        cp "$outputFile" "$ledgerFile"
+        echo "Your ledger file has been modified."
+        echo "Check all the changes with your version control's diff view, e.g. 'git diff'."
     fi
 }
 
