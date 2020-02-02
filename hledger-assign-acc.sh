@@ -31,9 +31,10 @@ options:
      update the original file in-place. dangerous! use this option only if you
      have your ledger files under version control.
   -p
-     pretty-print the output ledgerfile
+     pretty-print the output ledgerfile. warning: it uses 'hledger print' which
+     discards all hledger statements (like include, commodity, etc.).
   -h
-     print help message
+     print help message.
 EOF
 }
 
@@ -162,6 +163,7 @@ main() {
 
     if [[ -n $IN_PLACE ]]; then
         cp "$outputFile" "$ledgerFile"
+        echo
         echo "Your ledger file has been modified."
         echo "Check all the changes with your version control's diff view, e.g. 'git diff'."
     fi
